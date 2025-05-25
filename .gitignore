@@ -1,6 +1,4 @@
 .venv/
-venv/
-env/
 
 __pycache__/
 *.pyc
@@ -18,8 +16,6 @@ build/
 .vscode/
 .idea/
 
-.env
-.env.*
 *.log
 *.log.*
 *.sqlite3
