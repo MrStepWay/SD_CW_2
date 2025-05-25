@@ -1,0 +1,100 @@
+services:
+  # API Gateway
+  api_gateway:
+    build:
+      context: ./api_gateway
+    container_name: api_gateway
+    ports:
+      - "8000:8000"
+    environment:
+      FILE_STORAGE_SERVICE_URL: http://file_storage_service:8000
+      FILE_ANALYSIS_SERVICE_URL: http://file_analysis_service:8000
+    networks:
+      - easter_egg_net
+    depends_on:
+      - file_storage_service
+      - file_analysis_service
+
+  # PostgreSQL для File Storage
+  postgres_storage_db:
+    image: postgres:15-alpine
+    container_name: postgres_storage_db
+    volumes:
+      - postgres_storage_data:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER_STORAGE}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_STORAGE}
+      POSTGRES_DB: ${POSTGRES_DB_STORAGE}
+    networks:
+      - easter_egg_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER_STORAGE} -d ${POSTGRES_DB_STORAGE}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Сервис File Storage
+  file_storage_service:
+    build:
+      context: ./file_storage_service
+      dockerfile: Dockerfile
+    container_name: file_storage_service
+    volumes:
+      - storage_files:/storage
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: "postgresql+psycopg2://${POSTGRES_USER_STORAGE}:${POSTGRES_PASSWORD_STORAGE}@postgres_storage_db:5432/${POSTGRES_DB_STORAGE}"
+    networks:
+      - easter_egg_net
+    depends_on:
+      postgres_storage_db:
+        condition: service_healthy
+  
+  # PostgreSQL для File Analysis
+  postgres_analysis_db:
+    image: postgres:15-alpine
+    container_name: postgres_analysis_db
+    volumes:
+      - postgres_analysis_data:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER_ANALYSIS}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_ANALYSIS}
+      POSTGRES_DB: ${POSTGRES_DB_ANALYSIS}
+    networks:
+      - easter_egg_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER_ANALYSIS} -d ${POSTGRES_DB_ANALYSIS}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Сервис File Analysis
+  file_analysis_service:
+    build:
+      context: ./file_analysis_service
+    container_name: file_analysis_service
+    volumes:
+      - analysis_images:/images
+    ports:
+      - "8002:8000"
+    environment:
+      DATABASE_URL: "postgresql+psycopg2://${POSTGRES_USER_ANALYSIS}:${POSTGRES_PASSWORD_ANALYSIS}@postgres_analysis_db:5432/${POSTGRES_DB_ANALYSIS}"
+      FILE_STORAGE_SERVICE_URL: ${FILE_STORAGE_SERVICE_URL}
+    networks:
+      - easter_egg_net
+    depends_on:
+      postgres_analysis_db:
+        condition: service_healthy
+      file_storage_service:
+        condition: service_started
+
+networks:
+  easter_egg_net:
+    driver: bridge
+
+volumes:
+  postgres_storage_data:
+  storage_files:
+  postgres_analysis_data:
+  analysis_images:
